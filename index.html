@@ -41,9 +41,11 @@
         const FIRST_PLATFORM_WIDTH = 300;
         const PLATFORM_HEIGHT = 20;
         const PLAYER_SIZE = 20;
-        const JUMP_FORCE = -15;
+        const JUMP_FORCE = -10;  // Reduced jump force
+        const DOUBLE_JUMP_FORCE = -8; // Slightly weaker double jump
         const GRAVITY = 0.4;
         const GAME_SPEED = 5;
+        const DOUBLE_JUMP_COST = 50;
 
         // Platform colors sequence
         const PLATFORM_COLORS = [
@@ -67,20 +69,40 @@
             x: 100,
             y: 200,
             velocityY: 0,
-            isJumping: false
+            isJumping: false,
+            canDoubleJump: false,
+            hasDoubleJumped: false
         };
         let lastPlatformY = null;
 
         // Input handling
         let keys = {};
+        let spaceWasPressed = false;
+
         document.addEventListener('keydown', (e) => {
-            keys[e.code] = true;
-            if (e.code === 'Space' && !player.isJumping && player.velocityY < 8) {
-                player.velocityY = JUMP_FORCE;
-                player.isJumping = true;
+            if (e.code === 'Space' && !keys[e.code]) {
+                // Regular jump
+                if (!player.isJumping && player.velocityY < 8) {
+                    player.velocityY = JUMP_FORCE;
+                    player.isJumping = true;
+                    player.canDoubleJump = true;
+                    player.hasDoubleJumped = false;
+                }
+                // Double jump
+                else if (player.canDoubleJump && !player.hasDoubleJumped && score >= DOUBLE_JUMP_COST) {
+                    player.velocityY = DOUBLE_JUMP_FORCE;
+                    player.hasDoubleJumped = true;
+                    player.canDoubleJump = false;
+                    score -= DOUBLE_JUMP_COST;
+                    scoreElement.textContent = `Score: ${score}`;
+                }
             }
+            keys[e.code] = true;
         });
-        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
 
         // Platform generation with overlap prevention
         function generatePlatform(x = canvas.width, fixedY = null, width = STANDARD_PLATFORM_WIDTH) {
@@ -88,8 +110,7 @@
             if (fixedY !== null) {
                 y = fixedY;
             } else {
-                // Ensure new platform is at a different height from the last one
-                const minDistance = PLATFORM_HEIGHT * 2; // Minimum vertical distance between platforms
+                const minDistance = PLATFORM_HEIGHT * 2;
                 do {
                     y = Math.random() * (MAX_PLATFORM_Y - MIN_PLATFORM_Y) + MIN_PLATFORM_Y;
                 } while (lastPlatformY !== null && Math.abs(y - lastPlatformY) < minDistance);
@@ -105,11 +126,9 @@
                 color: PLATFORM_COLORS[colorIndex]
             });
 
-            // Cycle through colors
             colorIndex = (colorIndex + 1) % PLATFORM_COLORS.length;
         }
 
-        // Initialize game
         function initializeGame() {
             platforms = [];
             score = 0;
@@ -124,8 +143,9 @@
             player.y = firstPlatformY - PLAYER_SIZE;
             player.velocityY = 0;
             player.isJumping = false;
+            player.canDoubleJump = false;
+            player.hasDoubleJumped = false;
 
-            // Generate remaining platforms with spacing
             for (let i = 1; i < 5; i++) {
                 generatePlatform(i * 180 + FIRST_PLATFORM_WIDTH);
             }
@@ -151,6 +171,7 @@
                 
                 if (isNearPlatform) {
                     player.isJumping = false;
+                    player.hasDoubleJumped = false;
                 }
             });
 
@@ -167,6 +188,7 @@
                         player.y = platform.y - PLAYER_SIZE;
                         player.velocityY = 0;
                         player.isJumping = false;
+                        player.hasDoubleJumped = false;
                     }
                 }
             });
@@ -187,7 +209,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Draw player
-            ctx.fillStyle = '#ffffff'; // White player for better contrast
+            ctx.fillStyle = score >= DOUBLE_JUMP_COST ? '#ffffff' : '#cccccc';  // Dimmer when can't double jump
             ctx.fillRect(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE);
 
             // Draw platforms with their colors
@@ -195,6 +217,14 @@
                 ctx.fillStyle = platform.color;
                 ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
             });
+
+            // Draw double jump indicator
+            if (player.canDoubleJump && score >= DOUBLE_JUMP_COST) {
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(player.x + PLAYER_SIZE/2, player.y - 10, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
 
         function gameLoop() {
