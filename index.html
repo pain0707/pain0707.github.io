@@ -24,41 +24,47 @@
             font-size: 24px;
             margin: 10px 0;
         }
+        #countdown {
+            color: white;
+            font-size: 48px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <div id="score">Score: 0</div>
+        <div id="countdown">3</div>
         <canvas id="gameCanvas" width="800" height="400"></canvas>
     </div>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const scoreElement = document.getElementById('score');
+        const countdownElement = document.getElementById('countdown');
 
         // Game constants
         const STANDARD_PLATFORM_WIDTH = 100;
         const FIRST_PLATFORM_WIDTH = 300;
         const PLATFORM_HEIGHT = 20;
         const PLAYER_SIZE = 20;
-        const JUMP_FORCE = -10;  // Reduced jump force
-        const DOUBLE_JUMP_FORCE = -8; // Slightly weaker double jump
+        const JUMP_FORCE = -10;
+        const DOUBLE_JUMP_FORCE = -8;
         const GRAVITY = 0.7;
         const GAME_SPEED = 5;
         const DOUBLE_JUMP_COST = 50;
+        const JUMP_COOLDOWN = 250; // Minimum time between jumps in milliseconds
+        const RESPAWN_DELAY = 3; // Seconds to wait before respawning
 
-        // Platform colors sequence
         const PLATFORM_COLORS = [
-            '#e74c3c', // Red
-            '#e67e22', // Orange
-            '#f1c40f', // Yellow
-            '#2ecc71', // Green
-            '#3498db', // Blue
-            '#9b59b6'  // Purple
+            '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'
         ];
         let colorIndex = 0;
 
-        // Platform spawn height constraints
         const MIN_PLATFORM_Y = canvas.height - 150;
         const MAX_PLATFORM_Y = canvas.height - 50;
 
@@ -71,25 +77,32 @@
             velocityY: 0,
             isJumping: false,
             canDoubleJump: false,
-            hasDoubleJumped: false
+            hasDoubleJumped: false,
+            lastJumpTime: 0,
+            isActive: true // New property to control player activity
         };
         let lastPlatformY = null;
+        let gameActive = true;
 
         // Input handling
         let keys = {};
-        let spaceWasPressed = false;
 
         document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !keys[e.code]) {
+            if (e.code === 'Space' && !keys[e.code] && player.isActive) {
+                const currentTime = Date.now();
+                
                 // Regular jump
                 if (!player.isJumping && player.velocityY < 8) {
                     player.velocityY = JUMP_FORCE;
                     player.isJumping = true;
                     player.canDoubleJump = true;
                     player.hasDoubleJumped = false;
+                    player.lastJumpTime = currentTime;
                 }
-                // Double jump
-                else if (player.canDoubleJump && !player.hasDoubleJumped && score >= DOUBLE_JUMP_COST) {
+                // Double jump with timing check
+                else if (player.canDoubleJump && !player.hasDoubleJumped && 
+                        score >= DOUBLE_JUMP_COST && 
+                        currentTime - player.lastJumpTime >= JUMP_COOLDOWN) {
                     player.velocityY = DOUBLE_JUMP_FORCE;
                     player.hasDoubleJumped = true;
                     player.canDoubleJump = false;
@@ -104,7 +117,6 @@
             keys[e.code] = false;
         });
 
-        // Platform generation with overlap prevention
         function generatePlatform(x = canvas.width, fixedY = null, width = STANDARD_PLATFORM_WIDTH) {
             let y;
             if (fixedY !== null) {
@@ -129,6 +141,26 @@
             colorIndex = (colorIndex + 1) % PLATFORM_COLORS.length;
         }
 
+        function startCountdown(callback) {
+            player.isActive = false;
+            gameActive = false;
+            countdownElement.style.display = 'block';
+            let count = RESPAWN_DELAY;
+            
+            const countInterval = setInterval(() => {
+                count--;
+                countdownElement.textContent = count;
+                
+                if (count <= 0) {
+                    clearInterval(countInterval);
+                    countdownElement.style.display = 'none';
+                    player.isActive = true;
+                    gameActive = true;
+                    callback();
+                }
+            }, 1000);
+        }
+
         function initializeGame() {
             platforms = [];
             score = 0;
@@ -145,10 +177,15 @@
             player.isJumping = false;
             player.canDoubleJump = false;
             player.hasDoubleJumped = false;
+            player.lastJumpTime = 0;
 
             for (let i = 1; i < 5; i++) {
                 generatePlatform(i * 180 + FIRST_PLATFORM_WIDTH);
             }
+
+            startCountdown(() => {
+                // Game starts after countdown
+            });
         }
 
         function checkCollision(player, platform) {
@@ -160,6 +197,8 @@
         }
 
         function update() {
+            if (!gameActive) return;
+
             player.velocityY += GRAVITY;
             player.y += player.velocityY;
 
@@ -208,18 +247,16 @@
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw player
-            ctx.fillStyle = score >= DOUBLE_JUMP_COST ? '#ffffff' : '#cccccc';  // Dimmer when can't double jump
+            ctx.fillStyle = score >= DOUBLE_JUMP_COST ? '#ffffff' : '#cccccc';
             ctx.fillRect(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE);
 
-            // Draw platforms with their colors
             platforms.forEach(platform => {
                 ctx.fillStyle = platform.color;
                 ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
             });
 
-            // Draw double jump indicator
-            if (player.canDoubleJump && score >= DOUBLE_JUMP_COST) {
+            if (player.canDoubleJump && score >= DOUBLE_JUMP_COST && 
+                Date.now() - player.lastJumpTime >= JUMP_COOLDOWN) {
                 ctx.fillStyle = '#ffffff';
                 ctx.beginPath();
                 ctx.arc(player.x + PLAYER_SIZE/2, player.y - 10, 3, 0, Math.PI * 2);
@@ -233,7 +270,6 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // Start the game
         initializeGame();
         gameLoop();
     </script>
