@@ -41,9 +41,20 @@
         const FIRST_PLATFORM_WIDTH = 300;
         const PLATFORM_HEIGHT = 20;
         const PLAYER_SIZE = 20;
-        const JUMP_FORCE = -15;  // Stronger jump (was -12)
-        const GRAVITY = 0.4;     // Reduced gravity (was 0.5)
-        const GAME_SPEED = 5;    // Faster game speed (was 3)
+        const JUMP_FORCE = -15;
+        const GRAVITY = 0.4;
+        const GAME_SPEED = 5;
+
+        // Platform colors sequence
+        const PLATFORM_COLORS = [
+            '#e74c3c', // Red
+            '#e67e22', // Orange
+            '#f1c40f', // Yellow
+            '#2ecc71', // Green
+            '#3498db', // Blue
+            '#9b59b6'  // Purple
+        ];
+        let colorIndex = 0;
 
         // Platform spawn height constraints
         const MIN_PLATFORM_Y = canvas.height - 150;
@@ -58,12 +69,12 @@
             velocityY: 0,
             isJumping: false
         };
+        let lastPlatformY = null;
 
         // Input handling
         let keys = {};
         document.addEventListener('keydown', (e) => {
             keys[e.code] = true;
-            // Allow jump when close to platform (more forgiving jump timing)
             if (e.code === 'Space' && !player.isJumping && player.velocityY < 8) {
                 player.velocityY = JUMP_FORCE;
                 player.isJumping = true;
@@ -71,22 +82,39 @@
         });
         document.addEventListener('keyup', (e) => keys[e.code] = false);
 
-        // Platform generation
+        // Platform generation with overlap prevention
         function generatePlatform(x = canvas.width, fixedY = null, width = STANDARD_PLATFORM_WIDTH) {
-            const y = fixedY !== null ? fixedY : Math.random() * (MAX_PLATFORM_Y - MIN_PLATFORM_Y) + MIN_PLATFORM_Y;
+            let y;
+            if (fixedY !== null) {
+                y = fixedY;
+            } else {
+                // Ensure new platform is at a different height from the last one
+                const minDistance = PLATFORM_HEIGHT * 2; // Minimum vertical distance between platforms
+                do {
+                    y = Math.random() * (MAX_PLATFORM_Y - MIN_PLATFORM_Y) + MIN_PLATFORM_Y;
+                } while (lastPlatformY !== null && Math.abs(y - lastPlatformY) < minDistance);
+            }
+            
+            lastPlatformY = y;
             
             platforms.push({
                 x: x,
                 y: y,
                 width: width,
-                height: PLATFORM_HEIGHT
+                height: PLATFORM_HEIGHT,
+                color: PLATFORM_COLORS[colorIndex]
             });
+
+            // Cycle through colors
+            colorIndex = (colorIndex + 1) % PLATFORM_COLORS.length;
         }
 
         // Initialize game
         function initializeGame() {
             platforms = [];
             score = 0;
+            colorIndex = 0;
+            lastPlatformY = null;
             scoreElement.textContent = `Score: ${score}`;
 
             const firstPlatformY = canvas.height - 100;
@@ -97,28 +125,24 @@
             player.velocityY = 0;
             player.isJumping = false;
 
-            // Generate remaining platforms with slightly reduced spacing
+            // Generate remaining platforms with spacing
             for (let i = 1; i < 5; i++) {
                 generatePlatform(i * 180 + FIRST_PLATFORM_WIDTH);
             }
         }
 
-        // Collision detection with some leniency
         function checkCollision(player, platform) {
-            const leniency = 5; // Slight leniency in collision detection
+            const leniency = 5;
             return player.x + PLAYER_SIZE > platform.x &&
                    player.x < platform.x + platform.width &&
                    player.y + PLAYER_SIZE + leniency > platform.y &&
                    player.y < platform.y + platform.height;
         }
 
-        // Game loop
         function update() {
-            // Player physics
             player.velocityY += GRAVITY;
             player.y += player.velocityY;
 
-            // More forgiving jump reset when near platforms
             platforms.forEach(platform => {
                 const isNearPlatform = 
                     Math.abs((player.y + PLAYER_SIZE) - platform.y) < 10 &&
@@ -130,13 +154,11 @@
                 }
             });
 
-            // Prevent player from going above the canvas
             if (player.y < 0) {
                 player.y = 0;
                 player.velocityY = 0;
             }
 
-            // Platform movement and collision
             platforms.forEach(platform => {
                 platform.x -= GAME_SPEED;
 
@@ -149,7 +171,6 @@
                 }
             });
 
-            // Remove off-screen platforms and generate new ones
             platforms = platforms.filter(platform => platform.x + platform.width > 0);
             if (platforms.length < 5) {
                 generatePlatform();
@@ -157,7 +178,6 @@
                 scoreElement.textContent = `Score: ${score}`;
             }
 
-            // Game over condition
             if (player.y > canvas.height) {
                 initializeGame();
             }
@@ -167,12 +187,12 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // Draw player
-            ctx.fillStyle = '#e74c3c';
+            ctx.fillStyle = '#ffffff'; // White player for better contrast
             ctx.fillRect(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE);
 
-            // Draw platforms
-            ctx.fillStyle = '#2ecc71';
+            // Draw platforms with their colors
             platforms.forEach(platform => {
+                ctx.fillStyle = platform.color;
                 ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
             });
         }
