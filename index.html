@@ -71,7 +71,8 @@
             velocityY: 0,
             isJumping: false,
             canDoubleJump: false,
-            hasDoubleJumped: false
+            hasDoubleJumped: false,
+            isOnGround: false  // New property to track if player is on a platform
         };
         let lastPlatformY = null;
 
@@ -81,12 +82,13 @@
 
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space' && !keys[e.code]) {
-                // Regular jump
-                if (!player.isJumping) {
+                // Regular jump - only if on ground
+                if (player.isOnGround) {
                     player.velocityY = JUMP_FORCE;
                     player.isJumping = true;
                     player.canDoubleJump = true;
                     player.hasDoubleJumped = false;
+                    player.isOnGround = false;
                 }
                 // Double jump
                 else if (player.canDoubleJump && !player.hasDoubleJumped && score >= DOUBLE_JUMP_COST) {
@@ -145,6 +147,7 @@
             player.isJumping = false;
             player.canDoubleJump = false;
             player.hasDoubleJumped = false;
+            player.isOnGround = true;  // Start on ground
 
             for (let i = 1; i < 5; i++) {
                 generatePlatform(i * 180 + FIRST_PLATFORM_WIDTH);
@@ -160,18 +163,23 @@
         }
 
         function update() {
+            // Apply gravity and update position
             player.velocityY += GRAVITY;
             player.y += player.velocityY;
 
+            // Reset ground state at the start of each update
+            player.isOnGround = false;
+
+            // Check for platform collisions
             platforms.forEach(platform => {
-                const isNearPlatform = 
-                    Math.abs((player.y + PLAYER_SIZE) - platform.y) < 10 &&
-                    player.x + PLAYER_SIZE > platform.x &&
-                    player.x < platform.x + platform.width;
-                
-                if (isNearPlatform) {
-                    player.isJumping = false;
-                    player.hasDoubleJumped = false;
+                if (checkCollision(player, platform)) {
+                    if (player.velocityY > 0) {  // Only count as ground when falling
+                        player.y = platform.y - PLAYER_SIZE;
+                        player.velocityY = 0;
+                        player.isJumping = false;
+                        player.hasDoubleJumped = false;
+                        player.isOnGround = true;  // Set ground state when on platform
+                    }
                 }
             });
 
@@ -180,17 +188,9 @@
                 player.velocityY = 0;
             }
 
+            // Move and remove platforms
             platforms.forEach(platform => {
                 platform.x -= GAME_SPEED;
-
-                if (checkCollision(player, platform)) {
-                    if (player.velocityY > 0) {
-                        player.y = platform.y - PLAYER_SIZE;
-                        player.velocityY = 0;
-                        player.isJumping = false;
-                        player.hasDoubleJumped = false;
-                    }
-                }
             });
 
             platforms = platforms.filter(platform => platform.x + platform.width > 0);
@@ -200,6 +200,7 @@
                 scoreElement.textContent = `Score: ${score}`;
             }
 
+            // Reset game if player falls
             if (player.y > canvas.height) {
                 initializeGame();
             }
@@ -208,11 +209,11 @@
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw player
-            ctx.fillStyle = score >= DOUBLE_JUMP_COST ? '#ffffff' : '#cccccc';  // Dimmer when can't double jump
+            // Draw player with color indicating double jump availability
+            ctx.fillStyle = score >= DOUBLE_JUMP_COST ? '#ffffff' : '#cccccc';
             ctx.fillRect(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE);
 
-            // Draw platforms with their colors
+            // Draw platforms
             platforms.forEach(platform => {
                 ctx.fillStyle = platform.color;
                 ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
