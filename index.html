@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Procedural Platformer</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #2c3e50;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            text-align: center;
+        }
+        canvas {
+            border: 2px solid #fff;
+            background-color: #34495e;
+        }
+        #score {
+            color: white;
+            font-size: 24px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">Score: 0</div>
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+
+        // Game constants
+        const STANDARD_PLATFORM_WIDTH = 100;
+        const FIRST_PLATFORM_WIDTH = 300; // Much longer first platform
+        const PLATFORM_HEIGHT = 20;
+        const PLAYER_SIZE = 20;
+        const JUMP_FORCE = -12;
+        const GRAVITY = 0.5;
+        const GAME_SPEED = 3;
+
+        // Platform spawn height constraints
+        const MIN_PLATFORM_Y = canvas.height - 150; // Platforms won't spawn higher than this
+        const MAX_PLATFORM_Y = canvas.height - 50;  // Platforms won't spawn lower than this
+
+        // Game state
+        let score = 0;
+        let platforms = [];
+        let player = {
+            x: 100,
+            y: 200,
+            velocityY: 0,
+            isJumping: false
+        };
+
+        // Input handling
+        let keys = {};
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        // Platform generation
+        function generatePlatform(x = canvas.width, fixedY = null, width = STANDARD_PLATFORM_WIDTH) {
+            const y = fixedY !== null ? fixedY : Math.random() * (MAX_PLATFORM_Y - MIN_PLATFORM_Y) + MIN_PLATFORM_Y;
+            
+            platforms.push({
+                x: x,
+                y: y,
+                width: width,
+                height: PLATFORM_HEIGHT
+            });
+        }
+
+        // Initialize game
+        function initializeGame() {
+            // Clear existing platforms
+            platforms = [];
+            score = 0;
+            scoreElement.textContent = `Score: ${score}`;
+
+            // Create first platform at a fixed position with extra width
+            const firstPlatformY = canvas.height - 100;
+            generatePlatform(50, firstPlatformY, FIRST_PLATFORM_WIDTH);
+
+            // Set player position on first platform
+            player.x = 100;
+            player.y = firstPlatformY - PLAYER_SIZE;
+            player.velocityY = 0;
+            player.isJumping = false;
+
+            // Generate remaining initial platforms
+            for (let i = 1; i < 5; i++) {
+                generatePlatform(i * 200 + FIRST_PLATFORM_WIDTH); // Adjust spacing based on first platform width
+            }
+        }
+
+        // Collision detection
+        function checkCollision(player, platform) {
+            return player.x + PLAYER_SIZE > platform.x &&
+                   player.x < platform.x + platform.width &&
+                   player.y + PLAYER_SIZE > platform.y &&
+                   player.y < platform.y + platform.height;
+        }
+
+        // Game loop
+        function update() {
+            // Player physics
+            player.velocityY += GRAVITY;
+            player.y += player.velocityY;
+
+            // Jump control
+            if (keys['Space'] && !player.isJumping) {
+                player.velocityY = JUMP_FORCE;
+                player.isJumping = true;
+            }
+
+            // Prevent player from going above the canvas
+            if (player.y < 0) {
+                player.y = 0;
+                player.velocityY = 0;
+            }
+
+            // Platform movement and collision
+            platforms.forEach(platform => {
+                platform.x -= GAME_SPEED;
+
+                // Check for collision with platform
+                if (checkCollision(player, platform)) {
+                    if (player.velocityY > 0) {
+                        player.y = platform.y - PLAYER_SIZE;
+                        player.velocityY = 0;
+                        player.isJumping = false;
+                    }
+                }
+            });
+
+            // Remove off-screen platforms and generate new ones
+            platforms = platforms.filter(platform => platform.x + platform.width > 0);
+            if (platforms.length < 5) {
+                generatePlatform();
+                score += 10;
+                scoreElement.textContent = `Score: ${score}`;
+            }
+
+            // Game over condition (only when falling below canvas)
+            if (player.y > canvas.height) {
+                initializeGame();
+            }
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw player
+            ctx.fillStyle = '#e74c3c';
+            ctx.fillRect(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE);
+
+            // Draw platforms
+            ctx.fillStyle = '#2ecc71';
+            platforms.forEach(platform => {
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+            });
+        }
+
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        initializeGame();
+        gameLoop();
+    </script>
+</body>
+</html>
