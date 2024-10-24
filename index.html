@@ -155,7 +155,7 @@
         }
 
         function checkCollision(player, platform) {
-            const leniency = 5;
+            const leniency = 10;
             return player.x + PLAYER_SIZE > platform.x &&
                    player.x < platform.x + platform.width &&
                    player.y + PLAYER_SIZE + leniency > platform.y &&
