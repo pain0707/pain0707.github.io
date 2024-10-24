@@ -11,6 +11,7 @@
             min-height: 100vh;
             background-color: #2c3e50;
             font-family: Arial, sans-serif;
+            touch-action: none;
         }
         #gameContainer {
             text-align: center;
@@ -41,28 +42,20 @@
         const FIRST_PLATFORM_WIDTH = 300;
         const PLATFORM_HEIGHT = 20;
         const PLAYER_SIZE = 20;
-        const JUMP_FORCE = -12;  // Reduced jump force
-        const DOUBLE_JUMP_FORCE = -10; // Slightly weaker double jump
+        const JUMP_FORCE = -12;
+        const DOUBLE_JUMP_FORCE = -10;
         const GRAVITY = 0.7;
         const GAME_SPEED = 5;
         const DOUBLE_JUMP_COST = 50;
 
-        // Platform colors sequence
         const PLATFORM_COLORS = [
-            '#e74c3c', // Red
-            '#e67e22', // Orange
-            '#f1c40f', // Yellow
-            '#2ecc71', // Green
-            '#3498db', // Blue
-            '#9b59b6'  // Purple
+            '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'
         ];
         let colorIndex = 0;
 
-        // Platform spawn height constraints
         const MIN_PLATFORM_Y = canvas.height - 150;
         const MAX_PLATFORM_Y = canvas.height - 50;
 
-        // Game state
         let score = 0;
         let platforms = [];
         let player = {
@@ -72,32 +65,35 @@
             isJumping: false,
             canDoubleJump: false,
             hasDoubleJumped: false,
-            isOnGround: false  // New property to track if player is on a platform
+            isOnGround: false
         };
         let lastPlatformY = null;
+        let lastJumpTime = 0;
+        const DOUBLE_TAP_THRESHOLD = 300; // Time window for double tap in milliseconds
 
         // Input handling
         let keys = {};
-        let spaceWasPressed = false;
 
+        function handleJump() {
+            if (player.isOnGround) {
+                player.velocityY = JUMP_FORCE;
+                player.isJumping = true;
+                player.canDoubleJump = true;
+                player.hasDoubleJumped = false;
+                player.isOnGround = false;
+            } else if (player.canDoubleJump && !player.hasDoubleJumped && score >= DOUBLE_JUMP_COST) {
+                player.velocityY = DOUBLE_JUMP_FORCE;
+                player.hasDoubleJumped = true;
+                player.canDoubleJump = false;
+                score -= DOUBLE_JUMP_COST;
+                scoreElement.textContent = `Score: ${score}`;
+            }
+        }
+
+        // Keyboard input
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space' && !keys[e.code]) {
-                // Regular jump - only if on ground
-                if (player.isOnGround) {
-                    player.velocityY = JUMP_FORCE;
-                    player.isJumping = true;
-                    player.canDoubleJump = true;
-                    player.hasDoubleJumped = false;
-                    player.isOnGround = false;
-                }
-                // Double jump
-                else if (player.canDoubleJump && !player.hasDoubleJumped && score >= DOUBLE_JUMP_COST) {
-                    player.velocityY = DOUBLE_JUMP_FORCE;
-                    player.hasDoubleJumped = true;
-                    player.canDoubleJump = false;
-                    score -= DOUBLE_JUMP_COST;
-                    scoreElement.textContent = `Score: ${score}`;
-                }
+                handleJump();
             }
             keys[e.code] = true;
         });
@@ -106,7 +102,24 @@
             keys[e.code] = false;
         });
 
-        // Platform generation with overlap prevention
+        // Touch input
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const currentTime = Date.now();
+            const timeSinceLastJump = currentTime - lastJumpTime;
+            handleJump();
+            lastJumpTime = currentTime;
+        }, { passive: false });
+
+        // Prevent default touch behaviors
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+
         function generatePlatform(x = canvas.width, fixedY = null, width = STANDARD_PLATFORM_WIDTH) {
             let y;
             if (fixedY !== null) {
@@ -147,7 +160,7 @@
             player.isJumping = false;
             player.canDoubleJump = false;
             player.hasDoubleJumped = false;
-            player.isOnGround = true;  // Start on ground
+            player.isOnGround = true;
 
             for (let i = 1; i < 5; i++) {
                 generatePlatform(i * 180 + FIRST_PLATFORM_WIDTH);
@@ -163,22 +176,19 @@
         }
 
         function update() {
-            // Apply gravity and update position
             player.velocityY += GRAVITY;
             player.y += player.velocityY;
 
-            // Reset ground state at the start of each update
             player.isOnGround = false;
 
-            // Check for platform collisions
             platforms.forEach(platform => {
                 if (checkCollision(player, platform)) {
-                    if (player.velocityY > 0) {  // Only count as ground when falling
+                    if (player.velocityY > 0) {
                         player.y = platform.y - PLAYER_SIZE;
                         player.velocityY = 0;
                         player.isJumping = false;
                         player.hasDoubleJumped = false;
-                        player.isOnGround = true;  // Set ground state when on platform
+                        player.isOnGround = true;
                     }
                 }
             });
@@ -188,7 +198,6 @@
                 player.velocityY = 0;
             }
 
-            // Move and remove platforms
             platforms.forEach(platform => {
                 platform.x -= GAME_SPEED;
             });
@@ -200,7 +209,6 @@
                 scoreElement.textContent = `Score: ${score}`;
             }
 
-            // Reset game if player falls
             if (player.y > canvas.height) {
                 initializeGame();
             }
@@ -209,17 +217,14 @@
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw player with color indicating double jump availability
             ctx.fillStyle = score >= DOUBLE_JUMP_COST ? '#ffffff' : '#cccccc';
             ctx.fillRect(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE);
 
-            // Draw platforms
             platforms.forEach(platform => {
                 ctx.fillStyle = platform.color;
                 ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
             });
 
-            // Draw double jump indicator
             if (player.canDoubleJump && score >= DOUBLE_JUMP_COST) {
                 ctx.fillStyle = '#ffffff';
                 ctx.beginPath();
@@ -234,7 +239,6 @@
             requestAnimationFrame(gameLoop);
         }
 
-        // Start the game
         initializeGame();
         gameLoop();
     </script>
