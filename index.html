@@ -82,7 +82,7 @@
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Space' && !keys[e.code]) {
                 // Regular jump
-                if (!player.isJumping && player.velocityY < 8) {
+                if (!player.isJumping) {
                     player.velocityY = JUMP_FORCE;
                     player.isJumping = true;
                     player.canDoubleJump = true;
