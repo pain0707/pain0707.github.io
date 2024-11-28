@@ -1,246 +1,185 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>THE Greatest Game of all Time</title>
-    <style>
-        body {
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #2c3e50;
-            font-family: Arial, sans-serif;
-            touch-action: none;
-        }
-        #gameContainer {
-            text-align: center;
-        }
-        canvas {
-            border: 2px solid #fff;
-            background-color: #34495e;
-        }
-        #score {
-            color: white;
-            font-size: 24px;
-            margin: 10px 0;
-        }
-    </style>
-</head>
-<body>
-    <div id="gameContainer">
-        <div id="score">Score: 0</div>
-        <canvas id="gameCanvas" width="800" height="400"></canvas>
-    </div>
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const scoreElement = document.getElementById('score');
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
-        // Game constants
-        const STANDARD_PLATFORM_WIDTH = 100;
-        const FIRST_PLATFORM_WIDTH = 300;
-        const PLATFORM_HEIGHT = 20;
-        const PLAYER_SIZE = 20;
-        const JUMP_FORCE = -12;
-        const DOUBLE_JUMP_FORCE = -10;
-        const GRAVITY = 0.7;
-        const GAME_SPEED = 5;
-        const DOUBLE_JUMP_COST = 50;
+// Light source data with their typical color temperatures
+const LIGHT_SOURCES = [
+  { 
+    name: 'Candle Flame', 
+    cct: 1900, 
+    description: 'Warm, intimate light typical of candlelight',
+    image: '/api/placeholder/200/200?text=Candle'
+  },
+  { 
+    name: 'Incandescent Bulb', 
+    cct: 2700, 
+    description: 'Soft, warm light found in traditional home lighting',
+    image: '/api/placeholder/200/200?text=Bulb'
+  },
+  { 
+    name: 'Sunrise/Sunset', 
+    cct: 3000, 
+    description: 'Golden hour light with warm, soft tones',
+    image: '/api/placeholder/200/200?text=Sunset'
+  },
+  { 
+    name: 'Fluorescent Office Light', 
+    cct: 4000, 
+    description: 'Cool, neutral light common in office environments',
+    image: '/api/placeholder/200/200?text=Office'
+  },
+  { 
+    name: 'Daylight', 
+    cct: 5500, 
+    description: 'Neutral white light of midday sunlight',
+    image: '/api/placeholder/200/200?text=Daylight'
+  },
+  { 
+    name: 'Overcast Sky', 
+    cct: 6500, 
+    description: 'Cool, bluish light on a cloudy day',
+    image: '/api/placeholder/200/200?text=Cloudy'
+  },
+  { 
+    name: 'Clear Blue Sky', 
+    cct: 7000, 
+    description: 'Very cool, blue-tinted light of a clear sky',
+    image: '/api/placeholder/200/200?text=Blue+Sky'
+  }
+];
 
-        const PLATFORM_COLORS = [
-            '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6'
-        ];
-        let colorIndex = 0;
+const ColorTemperatureGame = () => {
+  const [currentRound, setCurrentRound] = useState(0);
+  const [score, setScore] = useState(0);
+  const [options, setOptions] = useState([]);
+  const [correctAnswer, setCorrectAnswer] = useState(null);
+  const [gameOver, setGameOver] = useState(false);
+  const [feedback, setFeedback] = useState('');
 
-        const MIN_PLATFORM_Y = canvas.height - 150;
-        const MAX_PLATFORM_Y = canvas.height - 50;
+  // Generate a round with a target source and random options
+  const generateRound = () => {
+    // Select a random source as the target
+    const targetSource = LIGHT_SOURCES[Math.floor(Math.random() * LIGHT_SOURCES.length)];
+    
+    // Create an array of options (including the correct answer)
+    let roundOptions = [targetSource];
+    
+    // Add 3 random unique sources
+    while (roundOptions.length < 4) {
+      const randomSource = LIGHT_SOURCES[Math.floor(Math.random() * LIGHT_SOURCES.length)];
+      if (!roundOptions.some(option => option.name === randomSource.name)) {
+        roundOptions.push(randomSource);
+      }
+    }
+    
+    // Shuffle the options
+    roundOptions.sort(() => Math.random() - 0.5);
+    
+    setOptions(roundOptions);
+    setCorrectAnswer(targetSource);
+    setFeedback('');
+  };
 
-        let score = 0;
-        let platforms = [];
-        let player = {
-            x: 100,
-            y: 200,
-            velocityY: 0,
-            isJumping: false,
-            canDoubleJump: false,
-            hasDoubleJumped: false,
-            isOnGround: false
-        };
-        let lastPlatformY = null;
-        let lastJumpTime = 0;
-        const DOUBLE_TAP_THRESHOLD = 300; // Time window for double tap in milliseconds
+  // Start or reset the game
+  const startGame = () => {
+    setCurrentRound(0);
+    setScore(0);
+    setGameOver(false);
+    generateRound();
+  };
 
-        // Input handling
-        let keys = {};
+  // Handle player's answer selection
+  const handleAnswer = (selectedSource) => {
+    if (selectedSource.name === correctAnswer.name) {
+      setScore(prevScore => prevScore + 1);
+      setFeedback('Correct! The color temperature matches.');
+    } else {
+      setFeedback(`Incorrect. ${correctAnswer.name} has a color temperature of ${correctAnswer.cct}K.`);
+    }
 
-        function handleJump() {
-            if (player.isOnGround) {
-                player.velocityY = JUMP_FORCE;
-                player.isJumping = true;
-                player.canDoubleJump = true;
-                player.hasDoubleJumped = false;
-                player.isOnGround = false;
-            } else if (player.canDoubleJump && !player.hasDoubleJumped && score >= DOUBLE_JUMP_COST) {
-                player.velocityY = DOUBLE_JUMP_FORCE;
-                player.hasDoubleJumped = true;
-                player.canDoubleJump = false;
-                score -= DOUBLE_JUMP_COST;
-                scoreElement.textContent = `Score: ${score}`;
-            }
-        }
+    // Move to next round or end game
+    if (currentRound < 4) {
+      setTimeout(() => {
+        setCurrentRound(prevRound => prevRound + 1);
+        generateRound();
+      }, 1500);
+    } else {
+      setTimeout(() => {
+        setGameOver(true);
+      }, 1500);
+    }
+  };
 
-        // Keyboard input
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !keys[e.code]) {
-                handleJump();
-            }
-            keys[e.code] = true;
-        });
+  // Initialize first round
+  useEffect(() => {
+    startGame();
+  }, []);
 
-        document.addEventListener('keyup', (e) => {
-            keys[e.code] = false;
-        });
+  if (gameOver) {
+    return (
+      <Card className="w-full max-w-md mx-auto mt-10">
+        <CardHeader>
+          <CardTitle>Color Temperature Challenge</CardTitle>
+        </CardHeader>
+        <CardContent className="text-center">
+          <h2 className="text-2xl mb-4">Game Over!</h2>
+          <p className="text-xl mb-6">Your Score: {score} / 5</p>
+          <Button onClick={startGame} className="w-full">
+            Play Again
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
-        // Touch input
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const currentTime = Date.now();
-            const timeSinceLastJump = currentTime - lastJumpTime;
-            handleJump();
-            lastJumpTime = currentTime;
-        }, { passive: false });
+  return (
+    <Card className="w-full max-w-md mx-auto mt-10">
+      <CardHeader>
+        <CardTitle>Color Temperature Challenge</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-4">
+          <p className="text-center text-lg">Round {currentRound + 1} / 5</p>
+          <p className="text-center text-xl font-bold my-4">
+            Match the Light Source: {correctAnswer?.name}
+          </p>
+          <p className="text-center text-sm text-gray-600 mb-4">
+            {correctAnswer?.description}
+          </p>
+        </div>
 
-        // Prevent default touch behaviors
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-        }, { passive: false });
+        {feedback && (
+          <div className={`mb-4 p-3 text-center rounded ${
+            feedback.includes('Correct') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }`}>
+            {feedback}
+          </div>
+        )}
 
-        canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
-        }, { passive: false });
+        <div className="grid grid-cols-2 gap-4">
+          {options.map((source) => (
+            <Button
+              key={source.name}
+              onClick={() => handleAnswer(source)}
+              className="w-full h-32 flex flex-col items-center justify-center"
+            >
+              <img 
+                src={source.image} 
+                alt={source.name} 
+                className="w-24 h-24 object-cover mb-2"
+              />
+              <span className="text-sm">{source.name}</span>
+              <span className="text-xs text-gray-500">{source.cct}K</span>
+            </Button>
+          ))}
+        </div>
 
-        function generatePlatform(x = canvas.width, fixedY = null, width = STANDARD_PLATFORM_WIDTH) {
-            let y;
-            if (fixedY !== null) {
-                y = fixedY;
-            } else {
-                const minDistance = PLATFORM_HEIGHT * 2;
-                do {
-                    y = Math.random() * (MAX_PLATFORM_Y - MIN_PLATFORM_Y) + MIN_PLATFORM_Y;
-                } while (lastPlatformY !== null && Math.abs(y - lastPlatformY) < minDistance);
-            }
-            
-            lastPlatformY = y;
-            
-            platforms.push({
-                x: x,
-                y: y,
-                width: width,
-                height: PLATFORM_HEIGHT,
-                color: PLATFORM_COLORS[colorIndex]
-            });
+        <div className="mt-4 text-center text-sm text-gray-600">
+          <p>Your Current Score: {score}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
 
-            colorIndex = (colorIndex + 1) % PLATFORM_COLORS.length;
-        }
-
-        function initializeGame() {
-            platforms = [];
-            score = 0;
-            colorIndex = 0;
-            lastPlatformY = null;
-            scoreElement.textContent = `Score: ${score}`;
-
-            const firstPlatformY = canvas.height - 100;
-            generatePlatform(50, firstPlatformY, FIRST_PLATFORM_WIDTH);
-
-            player.x = 100;
-            player.y = firstPlatformY - PLAYER_SIZE;
-            player.velocityY = 0;
-            player.isJumping = false;
-            player.canDoubleJump = false;
-            player.hasDoubleJumped = false;
-            player.isOnGround = true;
-
-            for (let i = 1; i < 5; i++) {
-                generatePlatform(i * 180 + FIRST_PLATFORM_WIDTH);
-            }
-        }
-
-        function checkCollision(player, platform) {
-            const leniency = 5;
-            return player.x + PLAYER_SIZE > platform.x &&
-                   player.x < platform.x + platform.width + 5 &&
-                   player.y + PLAYER_SIZE + leniency > platform.y &&
-                   player.y < platform.y + platform.height;
-        }
-
-        function update() {
-            player.velocityY += GRAVITY;
-            player.y += player.velocityY;
-
-            player.isOnGround = false;
-
-            platforms.forEach(platform => {
-                if (checkCollision(player, platform)) {
-                    if (player.velocityY > 0) {
-                        player.y = platform.y - PLAYER_SIZE;
-                        player.velocityY = 0;
-                        player.isJumping = false;
-                        player.hasDoubleJumped = false;
-                        player.isOnGround = true;
-                    }
-                }
-            });
-
-            if (player.y < 0) {
-                player.y = 0;
-                player.velocityY = 0;
-            }
-
-            platforms.forEach(platform => {
-                platform.x -= GAME_SPEED;
-            });
-
-            platforms = platforms.filter(platform => platform.x + platform.width > 0);
-            if (platforms.length < 5) {
-                generatePlatform();
-                score += 10;
-                scoreElement.textContent = `Score: ${score}`;
-            }
-
-            if (player.y > canvas.height) {
-                initializeGame();
-            }
-        }
-
-        function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = score >= DOUBLE_JUMP_COST ? '#ffffff' : '#cccccc';
-            ctx.fillRect(player.x, player.y, PLAYER_SIZE, PLAYER_SIZE);
-
-            platforms.forEach(platform => {
-                ctx.fillStyle = platform.color;
-                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-            });
-
-            if (player.canDoubleJump && score >= DOUBLE_JUMP_COST) {
-                ctx.fillStyle = '#ffffff';
-                ctx.beginPath();
-                ctx.arc(player.x + PLAYER_SIZE/2, player.y - 10, 3, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
-        function gameLoop() {
-            update();
-            render();
-            requestAnimationFrame(gameLoop);
-        }
-
-        initializeGame();
-        gameLoop();
-    </script>
-</body>
-</html>
+export default ColorTemperatureGame;
